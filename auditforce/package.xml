@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>AuditTrailBatchDeleteExistingTemp</members>
+        <members>AuditTrailBatchInsertToFinal</members>
+        <members>AuditTrailBatchTransformTemp</members>
+        <members>AuditTrailCheckBulkComplete</members>
+        <members>AuditTrailCheckBulkCompleteBatchWrapper</members>
+        <members>AuditTrailCheckBulkCompleteSchedule</members>
+        <members>AuditTrailGetAndLoadCSV</members>
+        <members>AuditTrailClearTempGetCSV</members>
+		<members>AuditTrailImporterScheduler</members>
+        <members>AuditTrailUnitTests</members>
+        <members>AuditTrailUtils</members>
+        <name>ApexClass</name>
+    </types>
+    <types>
+        <members>SetupAuditTrailPostToChatter</members>
+        <name>ApexTrigger</name>
+    </types>
+    <types>
+        <members>Setup_Audit_Trail__c</members>
+		<members>Setup_Audit_Trail_Config__c</members>
+		<members>TEMP_Setup_Audit_Trail__c</members>
+        <name>CustomObject</name>
+    </types>
+    <version>26.0</version>
+</Package>
