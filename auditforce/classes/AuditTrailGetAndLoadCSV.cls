@@ -6,10 +6,10 @@ public class AuditTrailGetAndLoadCSV {
  EX: https://na15.salesforce.com
   
  */
- 
-  	public static void getTrail() {
-		//get a session Id for all the API requests
-		String sessionId = AuditTrailUtils.getSessionId();  
+	public static List<String> allLines {get; set;}
+	private static Integer inputCharacterMax { get { return 100000; } set; } // this is a somewhat arbitrary character limit
+	public static String sessionId = UserInfo.getSessionId();
+  	public static void getTrail() {  
 		
 		//===================================================================
 		//Step 1: get the URL for the Setup Audit Trail .CSV file.  This is just because we need the CONFIRMATIONTOKEN (screen scrape!)
@@ -28,14 +28,16 @@ public class AuditTrailGetAndLoadCSV {
 			res = http.send(req);
 			viewAuditPage = res.getBody();
 		}
-		
+		//System.debug('viewAuditPage:'+viewAuditPage);
 		//parse out just the URL we want from the full HTML source
 		List<String> auditPageList = viewAuditPage.split('href="/servlet/servlet.SetupAuditTrail', 2);
+        
 		String csvURL = '/servlet/servlet.SetupAuditTrail' + auditPageList[1].split('"', 2)[0];
 		csvURL = csvURL.replace('&amp;', '&');
 		
 		
-		
+		System.debug('csvURL:'+csvURL);
+        System.debug('URL:'+URL.getSalesforceBaseUrl().toExternalForm()+csvURL);
 		//===================================================================
 		//Step 2: get the csv file		
 		http = new Http();
@@ -54,12 +56,54 @@ public class AuditTrailGetAndLoadCSV {
 		}
 		
 		//trim off the existing header row, and replace it with one that has the correct fieldnames.		
-		csvContent = csvContent.removeStart('Date,User,Action,Section,Delegate User\n');
-		csvContent = 'Date_String__c,Username__c,Action__c,Section__c,Delegate_User__c\n' + csvContent; 
-		
-		Blob csvBlob = Blob.valueOf(csvContent);
-		
-		
+		csvContent = csvContent.removeStart('Date,User,Source Namespace Prefix,Action,Section,Delegate User\n');
+		csvContent = 'Date_String__c,Username__c,SourceName__c,Action__c,Section__c,Delegate_User__c\n' + csvContent; 
+        List<String> lines = new List<String>();
+        try {
+            allLines = new List<String>();
+            divideString(csvContent);
+        } catch (System.ListException e) {
+            System.debug('Limits exceeded?' + e.getMessage());
+        }
+        String jobid = createBulkLoadJob();
+		breakCSVinBatchesAndSubmit(jobid);	
+        closeBulkJob(jobId);
+        scheduleFuture();
+    }
+    public static void breakCSVinBatchesAndSubmit(String jobid){
+        Integer count = 0;
+        Integer maxBatchSize = 9999;
+        List<String> csvBatch = new List<String>();
+        System.debug('headers: '+allLines[0]);
+        csvBatch.add(allLines[0]);
+        for(integer i=1;i<=allLines.size()-1;i++){
+            count++;
+            if(count <= allLines.size()){
+                if(String.isBlank(allLines[i].trim())) continue;
+                if(allLines[i].trim().equals('"')) continue;
+                csvBatch.add(allLines[i]);
+                if(count == maxBatchSize){
+                    count = 0;
+                    String batchCSVFile = string.join(csvBatch,'"\n');
+                    System.debug(batchCSVFile);
+                    batchCSVFile.removeEnd('\n');
+                    batchCSVFile += '"';
+                    addBatchtoJob(Blob.valueOf(batchCSVFile),jobId);
+                    csvBatch = new List<String>();
+                    csvBatch.add(allLines[0]);
+                }
+                
+            }
+        }
+        if(count > 0){
+            String batchCSVFile = string.join(csvBatch,'"\n');
+			batchCSVFile.removeEnd('\n');
+            batchCSVFile += '"';
+            System.debug(batchCSVFile);
+            addBatchtoJob(Blob.valueOf(batchCSVFile),jobId);
+        }
+    }
+    public static String createBulkLoadJob(){
 		//===================================================================		
 		//Step 3: create a Bulk Load Job
 		String loadDef =
@@ -73,15 +117,16 @@ public class AuditTrailGetAndLoadCSV {
 		doc.load(loadDef);		
 		
 			
-		http = new Http();
-		req = new HttpRequest();
-		req.setEndpoint(URL.getSalesforceBaseUrl().toExternalForm()+'/services/async/27.0/job');
+		Http http = new Http();
+		HttpRequest req = new HttpRequest();
+		req.setEndpoint(URL.getSalesforceBaseUrl().toExternalForm()+'/services/async/40.0/job');
 		req.setMethod('GET');
 		req.setHeader('X-SFDC-Session', sessionId); 
 		req.setHeader('Content-Type', 'application/xml; charset=UTF-8');
 		req.setBodyDocument(doc);
 		
-		String xmlRes;			
+		String xmlRes;
+        HTTPResponse res = new HTTPResponse();
 		if (Test.isRunningTest()) {
 			xmlRes = getDummyCreateJobResponse();
 		} else {
@@ -99,19 +144,22 @@ public class AuditTrailGetAndLoadCSV {
 				break;	
 			}
 		}
-
+		return jobId;
+    }
 		
-		
+    public static void addBatchtoJob(Blob csvBlob, String jobId){
+        System.debug('adding to batch');
 		//===================================================================
 		//Step 4: add a batch to the job.  We will have just 1 batch, the csv file			
-		http = new Http();
-		req = new HttpRequest();
-		req.setEndpoint(URL.getSalesforceBaseUrl().toExternalForm()+'/services/async/27.0/job/'+jobId+'/batch');
+		Http http = new Http();
+		HttpRequest req = new HttpRequest();
+		req.setEndpoint(URL.getSalesforceBaseUrl().toExternalForm()+'/services/async/40.0/job/'+jobId+'/batch');
 		req.setMethod('GET');
 		req.setHeader('X-SFDC-Session', sessionId);		 
 		req.setHeader('Content-Type', 'text/csv; charset=UTF-8');						
 		req.setBodyAsBlob(csvBlob);
-		
+		String xmlRes;
+        HTTPResponse res = new HTTPResponse();
 		if (Test.isRunningTest()) {
 			xmlRes = getDummyAddBatchResponse();
 		} else {
@@ -120,16 +168,16 @@ public class AuditTrailGetAndLoadCSV {
 		}		
 		
 		String batchId; //get the Bulk Load Batch Id
-		doc = new DOM.Document();		
+		DOM.Document doc = new DOM.Document();		
 		doc.load(xmlRes);
 		for(Dom.XMLNode childNode: doc.getRootElement().getChildren()) {
 			if (childNode.getName() == 'id') {
 				batchId = childNode.getText();
 				break;	
 			}
-		}
-		
-		
+		}	
+    }
+    public static void closeBulkJob(String jobId){
 		//===================================================================		
 		//Step 5: close the job
 		String closeDef =
@@ -137,26 +185,25 @@ public class AuditTrailGetAndLoadCSV {
 		'<jobInfo xmlns="http://www.force.com/2009/06/asyncapi/dataload">'+
 		'<state>Closed</state>'+
 		'</jobInfo>';
-		doc = new DOM.Document();
+		DOM.Document doc = new DOM.Document();
 		doc.load(closeDef);
 		
-		http = new Http();
-		req = new HttpRequest();
-		req.setEndpoint(URL.getSalesforceBaseUrl().toExternalForm()+'/services/async/27.0/job/'+jobId);
+		Http http = new Http();
+		HttpRequest req = new HttpRequest();
+		req.setEndpoint(URL.getSalesforceBaseUrl().toExternalForm()+'/services/async/40.0/job/'+jobId);
 		req.setMethod('GET');
 		req.setHeader('X-SFDC-Session', sessionId);
 		req.setHeader('Content-Type', 'application/xml; charset=UTF-8');
 		req.setBodyDocument(doc);
-
+		HTTPResponse res = new HTTPResponse();
+        String xmlRes;
 		if (!Test.isRunningTest()) {
 			res = http.send(req);
 			xmlRes = res.getBody();
 		}			
-
-		//update our config custom object with the jobId and the batchId since we can't just pass them to the
-		//future, scheduled jobs.
-		AuditTrailUtils.updateConfig(jobId, batchId);
-
+    }
+		
+    public static void scheduleFuture(){
 		
 		//===================================================================		
 		//Step 6: the bulk CSV load job is all queued up and finalized
@@ -165,7 +212,7 @@ public class AuditTrailGetAndLoadCSV {
 		//and re-schedule itself until it is finished as a failsafe in case the load job
 		//takes a long time to run.  such as in orgs with a lot of bulk jobs running for other reasons.
 		
-		Integer minuteDelay = 1;
+		Integer minuteDelay = 5;
 		
 		
 		Datetime d = Datetime.now().addMinutes(minuteDelay);
@@ -175,11 +222,6 @@ public class AuditTrailGetAndLoadCSV {
 		
 		AuditTrailCheckBulkCompleteSchedule check = new AuditTrailCheckBulkCompleteSchedule();
 		System.Schedule('Audit Trail Check Bulk Completion '+d.format(), sch, check);
-
-		/*
-		AuditTrailCheckBulkCompleteBatchWrapper batchWrapper = new AuditTrailCheckBulkCompleteBatchWrapper();
-		String cronID = System.scheduleBatch(batchWrapper, 'Audit Trail Check Bulk Completion '+d.format(), 1, 2000);
-		*/	
 	}
 	
 		
@@ -233,7 +275,26 @@ public class AuditTrailGetAndLoadCSV {
 		'<numberRecordsProcessed>0</numberRecordsProcessed>'+
 		'</batchInfo>';
 	}
-
-
-
+    
+    public static void divideString(String input) {
+        
+        Integer pivot = input.indexOf( '"\n', Integer.valueOf(Math.floor(input.length() / 2) ) );
+        
+        String left = input.substring(0,pivot);
+        String right = input.substring(pivot);
+        
+        if ( pivot < inputCharacterMax ) {
+            // split left and right chunks, add to allLines
+            List<String> leftLines = left.split('"\n');
+            List<String> rightLines = right.split('"\n');
+            allLines.addAll(leftLines);
+            allLines.addAll(rightLines);
+        }else {
+            // divide and conquer!
+            divideString(left);
+            divideString(right);
+        }
+    }
+    
+    
 }
