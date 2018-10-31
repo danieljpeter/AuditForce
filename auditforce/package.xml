@@ -7,22 +7,28 @@
         <members>AuditTrailCheckBulkComplete</members>
         <members>AuditTrailCheckBulkCompleteBatchWrapper</members>
         <members>AuditTrailCheckBulkCompleteSchedule</members>
-        <members>AuditTrailGetAndLoadCSV</members>
         <members>AuditTrailClearTempGetCSV</members>
-		<members>AuditTrailImporterScheduler</members>
+        <members>AuditTrailGetAndLoadCSV</members>
+        <members>AuditTrailImporterScheduler</members>
         <members>AuditTrailUnitTests</members>
-        <members>AuditTrailUtils</members>
         <name>ApexClass</name>
     </types>
     <types>
-        <members>SetupAuditTrailPostToChatter</members>
-        <name>ApexTrigger</name>
-    </types>
-    <types>
         <members>Setup_Audit_Trail__c</members>
-		<members>Setup_Audit_Trail_Config__c</members>
-		<members>TEMP_Setup_Audit_Trail__c</members>
+        <members>TEMP_Setup_Audit_Trail__c</members>
         <name>CustomObject</name>
     </types>
-    <version>26.0</version>
+    <types>
+        <members>Salesforce_Audit/Audit_Trail</members>
+        <name>Dashboard</name>
+    </types>
+    <types>
+        <members>Salesforce_Audit/Administrators</members>
+        <members>Salesforce_Audit/Changes_By_User_This_Week</members>
+        <members>Salesforce_Audit/Changes_By_User_Today</members>
+        <members>Salesforce_Audit/Section_Changes_This_Week</members>
+        <members>Salesforce_Audit/Section_Changes_Today</members>
+        <name>Report</name>
+    </types>
+    <version>42.0</version>
 </Package>

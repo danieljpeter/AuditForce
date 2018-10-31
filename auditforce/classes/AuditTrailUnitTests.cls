@@ -69,7 +69,14 @@ public class AuditTrailUnitTests {
 	 	
 		System.AssertEquals(database.countquery('SELECT COUNT()FROM TEMP_Setup_Audit_Trail__c WHERE Section__c=\'Test Apex Class\''), 0);  	 	
 	}
-	
+    static testMethod void AuditTrailClearTempGetCSVtest(){
+        insertTempObjects();
+		
+		Test.StartTest();
+		AuditTrailClearTempGetCSV a = new AuditTrailClearTempGetCSV();
+		Id batchProcessId = Database.executeBatch(a);
+	 	Test.StopTest();
+    }
 	
 	static testMethod void testAuditTrailImporterScheduler() {
 		Test.StartTest();			
@@ -79,60 +86,6 @@ public class AuditTrailUnitTests {
 		System.Schedule('Audit Trail Check Bulk Completion TEST', sch, a);	
 		Test.StopTest();			
 	} 	
-
-
-	static testMethod void testAuditTrailUtils_getConfig_updateConfig() {
-		Test.StartTest();
-		Setup_Audit_Trail_Config__c c = new Setup_Audit_Trail_Config__c(name='name',
-																	  username__c = 'usergroup@danpeter.com',
-																	  password__c = 'password',
-																	  token__c = 'token',							  
-																	  Bulk_Job_ID__c = 'jobId',							  
-																	  Bulk_Batch_ID__c = 'batchId');
-		insert c;
-		Test.StopTest();
-			
-		Map<String,String> configMap = AuditTrailUtils.getConfig();
-		System.AssertEquals(configMap.get('username'), 'usergroup@danpeter.com');
-		System.AssertEquals(configMap.get('password'), 'password');
-		System.AssertEquals(configMap.get('token'), 'token');
-		System.AssertEquals(configMap.get('jobId'), 'jobId');
-		System.AssertEquals(configMap.get('batchId'), 'batchId');
-		
-		AuditTrailUtils.updateConfig('jobId2', 'batchId2');		
-		configMap = AuditTrailUtils.getConfig();
-		System.AssertEquals(configMap.get('jobId'), 'jobId2');
-		System.AssertEquals(configMap.get('batchId'), 'batchId2');		
-	}
-
-	static testMethod void testAuditTrailUtils_getSessionId() {
-		System.AssertEquals(AuditTrailUtils.getSessionId(), '00Di0000000fnjR!ARAAQHLABD_pDEsAVmS6vPUORiIThiH9B4GE7cJHE5htToV9UOshfxPUIfVcBYRxKzincGp_6uIPoiHqhTzPRSULo0h7mv1l');
-	}
-
-
-	static testMethod void testSetupAuditTrailPostToChatterTrigger() {
-		Test.StartTest();			
-		Setup_Audit_Trail_Config__c c = new Setup_Audit_Trail_Config__c(name='name',
-																	  Post_to_Chatter__c = true,
-																	  Chatter_Group_Id__c = null);
-		insert c;
-		Test.StopTest();
-		
-		List<Setup_Audit_Trail__c> sList = new List<Setup_Audit_Trail__c>(); 
-		
-		for(Integer i = 0; i < 100; i++){
-			Setup_Audit_Trail__c s = new Setup_Audit_Trail__c(
-			Date__c 			= Datetime.now().addSeconds(-1*i), 
-			Username__c			= 'usergroup@danpeter.com', 
-			Action_Short__c 	= 'Action (Short)',
-			Action__c 			= 'Action', 
-			Section__c			= 'Apex', 
-			Delegate_User__c 	= '');
-			sList.add(s);
-		}
-		insert sList;
-	} 	
-
 
 	static void insertTempObjects() {
 		//insert some test TEMP objects
